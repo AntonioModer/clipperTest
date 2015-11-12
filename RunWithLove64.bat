@@ -1,0 +1,1 @@
+"LOVE 0.9.2 64\love.exe" "%CHDIR%"
