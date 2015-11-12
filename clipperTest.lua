@@ -15,10 +15,10 @@ do
 	thisModule.cell = {}
 	thisModule.cell.polygons = {}
 	thisModule.cell.polygons[1] = {
-		200, 100,
-		600, 100,
-		600, 500,
-		200, 500
+		200, 110,
+		600, 110,
+		600, 510,
+		200, 510
 	}
 	thisModule.cell.clipperPolygons = {}
 end
@@ -73,11 +73,17 @@ function thisModule:update(dt)
 		x+100, y+100,
 		x, y+100
 	}
-	
+	thisModule.obstacle.polygons[2] = {
+		0, 0,
+		1, 0,
+		1, 1,
+		0, 1
+	}	
 	--------------------------- clipper
 	if true then
 	--	thisModule.obstacle.clipperPolygon:clean()															-- работает не так как я ожидал
 		thisModule.obstacle.clipperPolygons[1] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1])
+		thisModule.obstacle.clipperPolygons[2] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2])
 		thisModule.clipper.result = thisModule.clipper:clip(thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons), thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons))
 		
 --		thisModule.clipper.result = thisModule.clipper.result:clean()
