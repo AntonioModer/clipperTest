@@ -1,3 +1,3 @@
 # README #
 
-BUGS: see images
+Clipper give dont correct results, see images
