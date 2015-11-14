@@ -1,11 +1,12 @@
 --[[
-version 0.0.2
+version 0.0.3
 HELP:
 	+ https://love2d.org/forums/viewtopic.php?f=5&t=81229
 TODO:
-	-BUG1 TODO1.1 почему исчезает половинка, если делить с права на лево? (смотри скриншет бага)
+	- тестирование
+	+BUG1 почему исчезает половинка, если делить с права на лево? (смотри скриншет бага)
 		+ потому что существует разница между нижней границей вернего полигона и верхней границей нижнего полигона, т.е. их AABB формы не пересекаются
-	-BUG2 если obstacle ниже cell, то нулевой результат
+	+BUG2 если obstacle ниже cell, то нулевой результат
 --]]
 
 local thisModule = {}
@@ -69,9 +70,9 @@ function thisModule:update(dt)
 	local x, y = love.mouse.getPosition()
 	thisModule.obstacle.polygons[1] = {
 		x, y,
-		x+100, y,
-		x+100, y+100,
-		x, y+100
+		x+50, y,
+		x+50, y+50,
+		x, y+50
 	}
 	thisModule.obstacle.polygons[2] = {
 		0, 0,
@@ -82,14 +83,56 @@ function thisModule:update(dt)
 	--------------------------- clipper
 	if true then
 	--	thisModule.obstacle.clipperPolygon:clean()															-- работает не так как я ожидал
-		thisModule.obstacle.clipperPolygons[1] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1])
-		thisModule.obstacle.clipperPolygons[2] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2])
-		thisModule.clipper.result = thisModule.clipper:clip(thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons), thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons))
+		if #thisModule.cell.clipperPolygons > 0 then
+			thisModule.obstacle.clipperPolygons[1] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1])
+			thisModule.obstacle.clipperPolygons[2] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2])
+			thisModule.clipper.result = thisModule.clipper:clip(thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons), thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons))
+			
+--			thisModule.clipper.result = thisModule.clipper.result:clean()
+			thisModule.clipper.result = thisModule.clipper.result:simplify()
+			
+			thisModule:refreshResultFromClipperResult()
+		end
 		
---		thisModule.clipper.result = thisModule.clipper.result:clean()
---		thisModule.clipper.result = thisModule.clipper.result:simplify()
-		
-		thisModule:refreshResultFromClipperResult()
+		-- fix bug3 (see image)
+		if true then
+			local needFixError = false
+			for i, polygon in ipairs(thisModule.result.polygons) do
+				local triangles
+				local ok, out = pcall(love.math.triangulate, polygon)
+				if not ok then
+					-- cant draw(triangulate) result.polygons
+					needFixError = true
+					break
+				end
+			end
+			if needFixError then
+--				print('fixError')
+				x, y = x+1, y+1
+				thisModule.obstacle.polygons[1] = {
+					x, y,
+					x+50, y,
+					x+50, y+50,
+					x, y+50
+				}
+				thisModule.obstacle.polygons[2] = {
+					0, 0,
+					1, 0,
+					1, 1,
+					0, 1
+				}
+				if #thisModule.cell.clipperPolygons > 0 then
+					thisModule.obstacle.clipperPolygons[1] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1])
+					thisModule.obstacle.clipperPolygons[2] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2])
+					thisModule.clipper.result = thisModule.clipper:clip(thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons), thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons))
+					
+		--			thisModule.clipper.result = thisModule.clipper.result:clean()
+					thisModule.clipper.result = thisModule.clipper.result:simplify()
+					
+					thisModule:refreshResultFromClipperResult()
+				end				
+			end
+		end
 	end
 	
 end
@@ -103,7 +146,7 @@ function thisModule:mousePressed(x, y, button)
 			for i, polygon in ipairs(thisModule.cell.polygons) do
 				table.insert(thisModule.cell.clipperPolygons, thisModule.clipper:newPolygon(polygon))
 			end
-			print(#thisModule.cell.polygons)
+--			print(#thisModule.cell.polygons)
 		end
 	end	
 end
@@ -122,7 +165,7 @@ function thisModule:draw()
 					love.graphics.polygon("fill", triangle)
 				end					
 			else
-				love.graphics.print('cant draw(triangulate) cell.polygons', 0, 20, 0, 1, 1)
+				love.graphics.print('cant draw(triangulate) cell.polygons', 0, 0, 0, 1, 1)
 			end
 		end
 	end	
@@ -132,17 +175,21 @@ function thisModule:draw()
 	love.graphics.setLineJoin('none')
 	------------------------------------------------------ thisModule.result.polygons
 	if true then
-		love.graphics.setColor(0, 0, 255, 255)
 		for i, polygon in ipairs(thisModule.result.polygons) do
 			local triangles
 			local ok, out = pcall(love.math.triangulate, polygon)
 			if ok then
 				triangles = out
-				for i, triangle in ipairs(triangles) do
+				love.graphics.setColor(0, 0, 255, 255)
+				for i1, triangle in ipairs(triangles) do
 					love.graphics.polygon('line', triangle)
-				end					
+				end
+				
+				love.graphics.setColor(255, 0, 0, 255)
+				love.graphics.print(i, polygon[1], polygon[2], 0, 1.5, 1.5)
 			else
-				love.graphics.print('cant draw(triangulate) result.polygons', 0, 0, 0, 1, 1)
+				love.graphics.setColor(0, 0, 255, 255)
+				love.graphics.print('cant draw(triangulate) result.polygons', 0, 20, 0, 1, 1)
 			end
 		end
 	end
