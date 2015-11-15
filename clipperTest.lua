@@ -1,12 +1,46 @@
 --[[
+Copyright © Savoshchanka Anton Aleksandrovich, 2015
 version 0.0.3
 HELP:
 	+ https://love2d.org/forums/viewtopic.php?f=5&t=81229
+	+ https://github.com/AntonioModer/clipperTest
 TODO:
-	- тестирование
-	+BUG1 почему исчезает половинка, если делить с права на лево? (смотри скриншет бага)
+	- add license
+		- http://www.gnu.org/licenses/license-list.html#Introduction
+		+ zlib
+		-? or https://ru.wikipedia.org/wiki/%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D0%B8_%D0%B8_%D0%B8%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D1%8B_Creative_Commons
+	- TODO1 тестирование
+	+ BUG1 почему исчезает половинка, если делить с права на лево? (смотри скриншет бага)
 		+ потому что существует разница между нижней границей вернего полигона и верхней границей нижнего полигона, т.е. их AABB формы не пересекаются
-	+BUG2 если obstacle ниже cell, то нулевой результат
+	+ BUG2 если obstacle ниже cell, то нулевой результат
+	-+ TODO1.1 BUG3
+		+ fix1 увеличение obstacle
+		+ fix2 clean(), simplify() каждый полигон
+			- не работает как ожидал
+			- BUG4 simplify()
+--]]
+
+--[[
+	zlib License
+
+	Copyright (c) 2015 Savoshchanka Anton Aleksandrovich
+
+	This software is provided 'as-is', without any express or implied
+	warranty. In no event will the authors be held liable for any damages
+	arising from the use of this software.
+
+	Permission is granted to anyone to use this software for any purpose,
+	including commercial applications, and to alter it and redistribute it
+	freely, subject to the following restrictions:
+
+	1. The origin of this software must not be misrepresented; you must not
+	   claim that you wrote the original software. If you use this software
+	   in a product, an acknowledgement in the product documentation would be
+	   appreciated but is not required.
+	2. Altered source versions must be plainly marked as such, and must not be
+	   misrepresented as being the original software.
+	3. This notice may not be removed or altered from any source distribution.
+	
 --]]
 
 local thisModule = {}
@@ -22,6 +56,15 @@ do
 		200, 510
 	}
 	thisModule.cell.clipperPolygons = {}
+	
+	-- test clean()
+--	thisModule.cell.polygons[1] = {
+--		10, 10,
+--		100, 10,
+--		100, 100,
+--		10, 100,
+--		99, 99
+--	}		
 end
 
 -------------------------- obstacle
@@ -34,6 +77,12 @@ do
 		250, 250,
 		150, 250
 	}
+	thisModule.obstacle.polygons[2] = {
+		0, 0,
+		1, 0,
+		1, 1,
+		0, 1
+	}		
 	thisModule.obstacle.clipperPolygons = {}
 end
 
@@ -43,13 +92,22 @@ do
 	thisModule.result.polygons = {}
 	function thisModule:refreshResultFromClipperResult()
 		thisModule.result.polygons = {}
-		for polyN=1, thisModule.clipper.result:size() do
-			local clipperPolygon = thisModule.clipper.result:get(polyN)
-			thisModule.result.polygons[polyN] = {}
-			for pointN=1, clipperPolygon:size() do
-				table.insert(thisModule.result.polygons[polyN], tonumber(clipperPolygon:get(pointN).x))
-				table.insert(thisModule.result.polygons[polyN], tonumber(clipperPolygon:get(pointN).y))
-			end		
+		for polyN1=1, thisModule.clipper.result:size() do
+			local clipperPolygons = thisModule.clipper.result:get(polyN1)
+			clipperPolygons = clipperPolygons:clean()
+			clipperPolygons = thisModule.clipper.polygons(clipperPolygons)
+			clipperPolygons = clipperPolygons:clean()
+			clipperPolygons = clipperPolygons:simplify()
+			
+			for polyN2=1, clipperPolygons:size() do
+				local polyNInTable = polyN1-1+polyN2
+				thisModule.result.polygons[polyNInTable] = {}
+				local clipperPolygon = clipperPolygons:get(polyN2)
+				for pointN3=1, tonumber(clipperPolygon:size()) do
+					table.insert(thisModule.result.polygons[polyNInTable], tonumber(clipperPolygon:get(pointN3).x))
+					table.insert(thisModule.result.polygons[polyNInTable], tonumber(clipperPolygon:get(pointN3).y))
+				end
+			end
 		end	
 	end
 end
@@ -59,12 +117,16 @@ thisModule.clipper = require("clipper.clipper")
 
 table.insert(thisModule.cell.clipperPolygons, thisModule.clipper:newPolygon(thisModule.cell.polygons[1]))
 table.insert(thisModule.obstacle.clipperPolygons, thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1]))
+table.insert(thisModule.obstacle.clipperPolygons, thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2]))
 
 thisModule.clipper.result = thisModule.clipper:clip(thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons), thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons))
 thisModule:refreshResultFromClipperResult()
 
+
+
+
 function thisModule:update(dt)
-	
+--	if true then return nil end
 	----------------------------------------------------------------------------------------- update obstacle
 	-------------------------- двигаем obstacle
 	local x, y = love.mouse.getPosition()
@@ -86,34 +148,41 @@ function thisModule:update(dt)
 		if #thisModule.cell.clipperPolygons > 0 then
 			thisModule.obstacle.clipperPolygons[1] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1])
 			thisModule.obstacle.clipperPolygons[2] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2])
-			thisModule.clipper.result = thisModule.clipper:clip(thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons), thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons))
 			
+			local p1 = thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons)
+			local p2 = thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons)		
+			thisModule.clipper.result = thisModule.clipper:clip(p1, p2)
+			
+			-- вроде не работает тут как ожидал
 --			thisModule.clipper.result = thisModule.clipper.result:clean()
-			thisModule.clipper.result = thisModule.clipper.result:simplify()
+--			thisModule.clipper.result = thisModule.clipper.result:simplify()										-- BUG4 смотри картинку
 			
 			thisModule:refreshResultFromClipperResult()
 		end
 		
-		-- fix bug3 (see image)
-		if true then
-			local needFixError = false
+		-- fix1 BUG3 (see image)
+		if false then
+			local fixBUG3 = {}
+			fixBUG3.need = false
 			for i, polygon in ipairs(thisModule.result.polygons) do
 				local triangles
 				local ok, out = pcall(love.math.triangulate, polygon)
 				if not ok then
 					-- cant draw(triangulate) result.polygons
-					needFixError = true
+					fixBUG3.need = true
 					break
 				end
 			end
-			if needFixError then
---				print('fixError')
-				x, y = x+1, y+1
+			if fixBUG3.need then
+				print(os.clock(), 'fix bug 3')
+				
+				------------------------------ scale obstacle to +1
+				fixBUG3.x, fixBUG3.y = x-1, y-1
 				thisModule.obstacle.polygons[1] = {
-					x, y,
-					x+50, y,
-					x+50, y+50,
-					x, y+50
+					fixBUG3.x, fixBUG3.y,
+					fixBUG3.x+50+2, fixBUG3.y,
+					fixBUG3.x+50+2, fixBUG3.y+50+2,
+					fixBUG3.x, fixBUG3.y+50+2
 				}
 				thisModule.obstacle.polygons[2] = {
 					0, 0,
@@ -121,6 +190,43 @@ function thisModule:update(dt)
 					1, 1,
 					0, 1
 				}
+				if #thisModule.cell.clipperPolygons > 0 then
+					thisModule.obstacle.clipperPolygons[1] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1])
+					thisModule.obstacle.clipperPolygons[2] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2])
+					thisModule.clipper.result = thisModule.clipper:clip(thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons), thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons))
+					
+		--			thisModule.clipper.result = thisModule.clipper.result:clean()
+					thisModule.clipper.result = thisModule.clipper.result:simplify()
+					
+					thisModule:refreshResultFromClipperResult()
+				end
+				
+				------------------------------- перепроверяем
+				for i, polygon in ipairs(thisModule.result.polygons) do
+					local triangles
+					local ok, out = pcall(love.math.triangulate, polygon)
+					if not ok then
+						-- cant draw(triangulate) result.polygons
+						fixBUG3.need = false
+						break
+					end
+				end
+				
+				-------------------------------- если проблема не исправлена, то отменяем предыдущий результат; чтобы было все точно, без лишнего увеличения obstacle
+				if not fixBUG3.need then
+					thisModule.obstacle.polygons[1] = {
+						x, y,
+						x+50, y,
+						x+50, y+50,
+						x, y+50
+					}
+					thisModule.obstacle.polygons[2] = {
+						0, 0,
+						1, 0,
+						1, 1,
+						0, 1
+					}	
+				end
 				if #thisModule.cell.clipperPolygons > 0 then
 					thisModule.obstacle.clipperPolygons[1] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1])
 					thisModule.obstacle.clipperPolygons[2] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2])

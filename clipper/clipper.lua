@@ -234,19 +234,30 @@ polygons = polygons.new,
 C = C,
 
 ------------------------------------------------------------ my
+--[[
+version 0.0.1
+--]]
+
 executeOperation = {intersection='intersection', union='union', difference='difference', xor='xor'},
 fillType = {even_odd='even_odd', non_zero='non_zero', positive='positive', negative='negative'},
 
 checkType = {
 	clipper_Polygon = function (var)
-		local result = string.find(tostring(var), "clipper_Polygon")
+		if string.find(tostring(var), "clipper_Polygon") and not string.find(tostring(var), "clipper_Polygons") then
+			return  true
+		else
+			return  false
+		end
+	end,
+	clipper_Polygons = function (var)
+		local result = string.find(tostring(var), "clipper_Polygons")
 		if result then
 			result = true
 		else
 			result = false
 		end
 		return result
-	end
+	end	
 },
 
 newPolygon = function (self, tablePoints)
@@ -269,8 +280,8 @@ newPolygonsList = function (self, tableClipperPolygons)
 end,
 
 clip = function (self, subjectPolygon, clipPolygon)
-	assert(self.checkType.clipper_Polygon(subjectPolygon), "argument1 not clipper_Polygon or clipper_Polygons type")
-	assert(self.checkType.clipper_Polygon(clipPolygon), "argument2 not clipper_Polygon or clipper_Polygons type")
+	assert(self.checkType.clipper_Polygon(subjectPolygon) or self.checkType.clipper_Polygons(subjectPolygon), "argument1 not clipper_Polygon or clipper_Polygons type")
+	assert(self.checkType.clipper_Polygon(clipPolygon) or self.checkType.clipper_Polygons(clipPolygon), "argument2 not clipper_Polygon or clipper_Polygons type")
 	
 	local clO = self.new()																		-- clipper object
 	clO:add_subject(subjectPolygon)
