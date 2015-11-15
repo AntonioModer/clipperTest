@@ -1,23 +1,24 @@
 --[[
 Copyright © Savoshchanka Anton Aleksandrovich, 2015
-version 0.0.3
+version 0.0.4
 HELP:
 	+ https://love2d.org/forums/viewtopic.php?f=5&t=81229
 	+ https://github.com/AntonioModer/clipperTest
 TODO:
-	- add license
+	+ add license
 		- http://www.gnu.org/licenses/license-list.html#Introduction
 		+ zlib
 		-? or https://ru.wikipedia.org/wiki/%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D0%B8_%D0%B8_%D0%B8%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D1%8B_Creative_Commons
-	- TODO1 тестирование
-	+ BUG1 почему исчезает половинка, если делить с права на лево? (смотри скриншет бага)
+	- тестирование
+	-+ TODO1 code refactoring
+	+ BUG1 почему исчезает половинка, если делить с права на лево? (смотри скриншот бага)
 		+ потому что существует разница между нижней границей вернего полигона и верхней границей нижнего полигона, т.е. их AABB формы не пересекаются
 	+ BUG2 если obstacle ниже cell, то нулевой результат
-	-+ TODO1.1 BUG3
-		+ fix1 увеличение obstacle
-		+ fix2 clean(), simplify() каждый полигон
+	-+ BUG3
+		+ FIX1 увеличение obstacle (bad resolve)
+		+ FIX2 clean(), simplify() каждый полигон
 			- не работает как ожидал
-			- BUG4 simplify()
+			+ BUG4 simplify()
 --]]
 
 --[[
@@ -56,14 +57,14 @@ do
 		200, 510
 	}
 	thisModule.cell.clipperPolygons = {}
-	
+
 	-- test clean()
 --	thisModule.cell.polygons[1] = {
---		10, 10,
---		100, 10,
---		100, 100,
---		10, 100,
---		99, 99
+--		10*1, 10*1,
+--		100*1, 10*1,
+--		100*1, 100*1,
+--		10*1, 100*1,
+--		99*1, 99*1
 --	}		
 end
 
@@ -84,32 +85,53 @@ do
 		0, 1
 	}		
 	thisModule.obstacle.clipperPolygons = {}
+	function thisModule.obstacle:refreshClipperPolygons()
+		self.clipperPolygons = {}
+		for i, polygon in ipairs(self.polygons) do
+			table.insert(self.clipperPolygons, thisModule.clipper:newPolygon(polygon))
+		end
+	end	
 end
 
 -------------------------- result
 do
 	thisModule.result = {}
 	thisModule.result.polygons = {}
-	function thisModule:refreshResultFromClipperResult()
-		thisModule.result.polygons = {}
+	function thisModule.result:refreshFromClipperResult()
+		self.polygons = {}
 		for polyN1=1, thisModule.clipper.result:size() do
 			local clipperPolygons = thisModule.clipper.result:get(polyN1)
-			clipperPolygons = clipperPolygons:clean()
 			clipperPolygons = thisModule.clipper.polygons(clipperPolygons)
-			clipperPolygons = clipperPolygons:clean()
-			clipperPolygons = clipperPolygons:simplify()
+			clipperPolygons = clipperPolygons:clean()										-- try FIX2 BUG3
+			clipperPolygons = clipperPolygons:simplify()									-- FIX BUG4
 			
 			for polyN2=1, clipperPolygons:size() do
-				local polyNInTable = polyN1-1+polyN2
-				thisModule.result.polygons[polyNInTable] = {}
+				local newPolygon = {}
+				table.insert(self.polygons, newPolygon)
 				local clipperPolygon = clipperPolygons:get(polyN2)
 				for pointN3=1, tonumber(clipperPolygon:size()) do
-					table.insert(thisModule.result.polygons[polyNInTable], tonumber(clipperPolygon:get(pointN3).x))
-					table.insert(thisModule.result.polygons[polyNInTable], tonumber(clipperPolygon:get(pointN3).y))
+					table.insert(newPolygon, tonumber(clipperPolygon:get(pointN3).x))
+					table.insert(newPolygon, tonumber(clipperPolygon:get(pointN3).y))
 				end
 			end
 		end	
 	end
+end
+
+function thisModule:clip()
+	if #thisModule.cell.clipperPolygons > 0 then
+		thisModule.obstacle:refreshClipperPolygons()
+		
+		local p1 = thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons)
+		local p2 = thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons)		
+		thisModule.clipper.result = thisModule.clipper:clip(p1, p2)
+		
+		-- вроде не работает тут как ожидал
+--		thisModule.clipper.result = thisModule.clipper.result:clean()
+--		thisModule.clipper.result = thisModule.clipper.result:simplify()										-- BUG4 смотри картинку
+		
+		thisModule.result:refreshFromClipperResult()
+	end		
 end
 
 -------------------------- clipper
@@ -120,8 +142,7 @@ table.insert(thisModule.obstacle.clipperPolygons, thisModule.clipper:newPolygon(
 table.insert(thisModule.obstacle.clipperPolygons, thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2]))
 
 thisModule.clipper.result = thisModule.clipper:clip(thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons), thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons))
-thisModule:refreshResultFromClipperResult()
-
+thisModule.result:refreshFromClipperResult()
 
 
 
@@ -144,24 +165,10 @@ function thisModule:update(dt)
 	}	
 	--------------------------- clipper
 	if true then
-	--	thisModule.obstacle.clipperPolygon:clean()															-- работает не так как я ожидал
-		if #thisModule.cell.clipperPolygons > 0 then
-			thisModule.obstacle.clipperPolygons[1] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1])
-			thisModule.obstacle.clipperPolygons[2] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2])
-			
-			local p1 = thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons)
-			local p2 = thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons)		
-			thisModule.clipper.result = thisModule.clipper:clip(p1, p2)
-			
-			-- вроде не работает тут как ожидал
---			thisModule.clipper.result = thisModule.clipper.result:clean()
---			thisModule.clipper.result = thisModule.clipper.result:simplify()										-- BUG4 смотри картинку
-			
-			thisModule:refreshResultFromClipperResult()
-		end
+		thisModule:clip()
 		
-		-- fix1 BUG3 (see image)
-		if false then
+		-- FIX1 BUG3 (see image)
+		if true then
 			local fixBUG3 = {}
 			fixBUG3.need = false
 			for i, polygon in ipairs(thisModule.result.polygons) do
@@ -174,7 +181,6 @@ function thisModule:update(dt)
 				end
 			end
 			if fixBUG3.need then
-				print(os.clock(), 'fix bug 3')
 				
 				------------------------------ scale obstacle to +1
 				fixBUG3.x, fixBUG3.y = x-1, y-1
@@ -190,16 +196,7 @@ function thisModule:update(dt)
 					1, 1,
 					0, 1
 				}
-				if #thisModule.cell.clipperPolygons > 0 then
-					thisModule.obstacle.clipperPolygons[1] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1])
-					thisModule.obstacle.clipperPolygons[2] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2])
-					thisModule.clipper.result = thisModule.clipper:clip(thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons), thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons))
-					
-		--			thisModule.clipper.result = thisModule.clipper.result:clean()
-					thisModule.clipper.result = thisModule.clipper.result:simplify()
-					
-					thisModule:refreshResultFromClipperResult()
-				end
+				thisModule:clip()
 				
 				------------------------------- перепроверяем
 				for i, polygon in ipairs(thisModule.result.polygons) do
@@ -209,6 +206,9 @@ function thisModule:update(dt)
 						-- cant draw(triangulate) result.polygons
 						fixBUG3.need = false
 						break
+					else
+						-- если проблема исправлена
+						print(os.clock(), 'fix bug 3', x, y)
 					end
 				end
 				
@@ -226,17 +226,9 @@ function thisModule:update(dt)
 						1, 1,
 						0, 1
 					}	
+					thisModule:clip()				
 				end
-				if #thisModule.cell.clipperPolygons > 0 then
-					thisModule.obstacle.clipperPolygons[1] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[1])
-					thisModule.obstacle.clipperPolygons[2] = thisModule.clipper:newPolygon(thisModule.obstacle.polygons[2])
-					thisModule.clipper.result = thisModule.clipper:clip(thisModule.clipper:newPolygonsList(thisModule.cell.clipperPolygons), thisModule.clipper:newPolygonsList(thisModule.obstacle.clipperPolygons))
-					
-		--			thisModule.clipper.result = thisModule.clipper.result:clean()
-					thisModule.clipper.result = thisModule.clipper.result:simplify()
-					
-					thisModule:refreshResultFromClipperResult()
-				end				
+			
 			end
 		end
 	end
@@ -309,6 +301,8 @@ function thisModule:draw()
 	love.graphics.print('#cell.polygons = '..#thisModule.cell.polygons, 0, 40, 0, 1, 1)
 	love.graphics.setColor(0, 0, 255, 255)
 	love.graphics.print('clipper.result:size() = '..thisModule.clipper.result:size(), 0, 60, 0, 1, 1)
+	local mx, my = love.mouse.getPosition()
+	love.graphics.print('mouse position() = '..mx..', '..my, 0, 80, 0, 1, 1)
 end
 
 return thisModule
